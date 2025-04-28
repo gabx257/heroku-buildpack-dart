@@ -35,31 +35,21 @@ build_pubspec() {
   message "*** Found pubspec.yaml in $BUILD_DIR/$pub_dir"
   cd $BUILD_DIR/$pub_dir
 
-  DART_PATH=/app/dart-sdk/bin
-  PUB_CACHE_BIN=/app/pub-cache/bin
-  export PATH=$PATH:$DART_PATH:$PUB_CACHE_BIN
   message "*** Running pub get"
 
   # dart pub --version
 
   #start pub from the /app folder to have correct symlink paths
-  dart pub get  
-  
-  dart pub global activate webdev
-  if [ -d "web" ]
-  then
-    message "*** Running webdev build"
-    if [[ -z "$DART_BUILD_CMD" ]]
-    then
-      message 'Building with "webdev build"'
-      webdev build
-    else
-      message "Building with \"$DART_BUILD_CMD\""
-      eval $DART_BUILD_CMD
-    fi
-  else
-    message '*** Skipping pub build because "web" folder not found'
-  fi
+  dart pub get
+
+  message "*** Running compile"
+  dart compile exe bin/server.dart -o $BUILD_DIR/server.exe
+  chmod +x server.exe
+  message "*** finished building"
+  message "removing app src files"
+  FILES=`ls $BUILD_DIR`
+  message "----------> $FILES" 
+  find $BUILD_DIR -mindepth 1 -not -name "server.exe" -not -name "Procfile" -exec rm -rf {} +
 }
 
 export_env_dir "$3"
@@ -76,16 +66,21 @@ mkdir -p $PUB_CACHE
 MACHINE=`uname -a`
 message "-----> Welcome, this machine is: $MACHINE"
 
+cd $CACHE_DIR
+
+
+
 if [ -z "$DART_SDK_URL" ]; then
     message "ERROR: you must specify DART_SDK_URL to a Dart SDK for Linux. See README for this buildpack."
     exit 1
 fi
 
-cd $BUILD_DIR
+extracted_version=$(echo "$DART_SDK_URL" | grep -oE '/release/[0-9]+\.[0-9]+\.[0-9]+/' | cut -d'/' -f3)
+current_version=$($CACHE_DIR/dart-sdk/bin/dart --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+if [ "$extracted_version" != "$current_version" ]; then
 
 message "-----> Installing Dart VM via URL $DART_SDK_URL"
-
-cd $CACHE_DIR
 
 case "${DART_SDK_URL: -3}" in
   tar)
@@ -105,20 +100,22 @@ case "${DART_SDK_URL: -3}" in
     message "Invalid Dart SDK URL" #kill after this or keep going in case SDK is there from last push?
     ;;
 esac
-
-message "-----> Copy Dart binaries to app root"
-cp -r $CACHE_DIR/dart-sdk $BUILD_DIR
+fi
 
 # we need to copy the sdk into the /app folder in order for the sdk libraries
 # to be referenced correctly
 # reason being that the /tmp folder will be deleted after build, and /app
 # resembles the location of the ready built app
-cp -r $CACHE_DIR/dart-sdk /app
 
-DART_BIN=`ls -l /app/dart-sdk/bin/dart`
+DART_PATH=$CACHE_DIR/dart-sdk/bin
+PUB_CACHE_BIN=$CACHE_DIR/pub-cache/bin
+export PATH=$PATH:$DART_PATH:$PUB_CACHE_BIN
+
+DART_BIN=`$DART_PATH/dart`
 message "-----> Dart cmd found at $DART_BIN"
 
-CAN_DART_RUN=`/app/dart-sdk/bin/dart --version`
+
+CAN_DART_RUN=`dart --version`
 message "-----> Dart reports version: $CAN_DART_RUN"
 
 cd $BUILD_DIR
@@ -133,10 +130,3 @@ else
   message "PUBSPEC_PATH is set to $PUBSPEC_PATH"
   build_pubspec $PUBSPEC_PATH
 fi
-
-
-# I think heroku deletes all the contents of /app and replaces it with
-# whatever is in $BUILD_DIR, so copy over the pub-cache. Why not put it in
-# $BUILD_DIR in the first place? because we need symlinks setup correctly.
-cp -R $PUB_CACHE $BUILD_DIR/pub-cache
-message `ls -l $BUILD_DIR/pub-cache`
