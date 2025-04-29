@@ -111,8 +111,7 @@ DART_PATH=$CACHE_DIR/dart-sdk/bin
 PUB_CACHE_BIN=$CACHE_DIR/pub-cache/bin
 export PATH=$PATH:$DART_PATH:$PUB_CACHE_BIN
 
-DART_BIN=`$DART_PATH/dart`
-message "-----> Dart cmd found at $DART_BIN"
+message "-----> Dart cmd found at $DART_PATH"
 
 
 CAN_DART_RUN=`dart --version`
